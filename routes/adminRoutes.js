@@ -1,6 +1,7 @@
 const express = require("express");
 const authController = require("../controllers/authController");
 const adminController = require("../controllers/adminController");
+const partnerController=require('../controllers/partnerController')
 const validate = require("../middleware/validate");
 // const imgUpload = require("../middleware/imgUpload");
 const {upload} = require("../middleware/docUpload");
@@ -121,7 +122,12 @@ router.delete(
 );
 
 router.post("/purchase-service-for-client",adminController.purchaseServiceForClient);
+router.post("/assign-service-to-a-partner",adminController.assignServicesToPartner);
 router.get("/get-client-unpucharesed-services",adminController.getClientUnPucharsedServices);
+router.get("/get-filtered-pucharesed-services",adminController.filterPurchasedServicesDocs);
+router.get("/get-partner-list",adminController.getPartnerList);
+router.get("/get-assigned-services",partnerController.getAssignedServices)
+
 
 
 router.get("/get-purchased-services-docs",adminController.getPurchasedServicesDocs);

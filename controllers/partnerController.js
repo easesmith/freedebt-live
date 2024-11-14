@@ -85,14 +85,16 @@ exports.addClient = catchAsync(async (req, res, next) => {
 });
 
 exports.requestService = catchAsync(async (req, res, next) => {
-  const { clientId, serviceId, requirement } = req.body;
+  const { partnerId,clientId, serviceId, requirement } = req.body;
 
   const service = await Service.findById(serviceId);
 
   if (!service) {
     return next(new AppError("No Service exists with this id", 404));
   }
-
+  if(!partnerId){
+    return next(new AppError("No partner exists with this id", 404));
+  }
   const client = await Client.findById(clientId);
 
   if (!client) {
@@ -105,10 +107,13 @@ exports.requestService = catchAsync(async (req, res, next) => {
     type: client.type,
     status: "pending",
     requirement,
+    partnerId
   });
 
   await request.save();
-
+  if(!request){
+    return next(new AppError('somethng went wrong while creating the service request',400))
+  }
   res.status(201).json({
     success: true,
     message: "Service request sent successfully!",
@@ -341,6 +346,33 @@ exports.resetPassword = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.updateStatus = catchAsync(async (req, res, next) => {
+  const { serviceStatus, serviceLinkId } = req.query;
+
+  // Check if serviceStatus and serviceLinkId are provided
+  if (!serviceStatus || !serviceLinkId) {
+    return next(new AppError("Please provide serviceStatus and serviceLinkId", 400));
+  }
+
+  // Find and update the service status
+  const updatedServiceLink = await ServiceClientLink.findByIdAndUpdate(
+    serviceLinkId,
+    { serviceStatus },
+    { new: true }
+  );
+
+  // If no document is found, return an error
+  if (!updatedServiceLink) {
+    return next(new AppError("No service link found with the given ID", 404));
+  }
+
+  // Send the updated document in response
+  res.status(200).json({
+    status: true,
+    message: "Service status updated successfully",
+    updatedServiceLink,
+  });
+});
 
 
 exports.uploadDocument = catchAsync(async (req, res, next) => {
@@ -375,6 +407,102 @@ exports.uploadDocument = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.getAssignedServices = catchAsync(async (req, res, next) => {
+  const { partnerId, page = 1 } = req.query;
+  const limit = 10;
+
+  if (!partnerId) {
+    return next(new AppError("Please provide partner", 400));
+  }
+
+  const pageNum = parseInt(page, 10);
+  const limitNum = parseInt(limit, 10);
+  const skip = (pageNum - 1) * limitNum;
+
+  // Count documents with both partnerId and serviceStatus as "assigned"
+  const totalDocuments = await ServiceClientLink.countDocuments({
+    partnerId,
+    serviceStatus: "assigned"
+  });
+
+  // Find documents with both partnerId and serviceStatus as "assigned"
+  const assignedServices = await ServiceClientLink.find({
+    partnerId,
+    serviceStatus: "assigned"
+  })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limitNum)
+    .populate([
+      { path: "clientId", model: "Client" },
+      {
+        path: "serviceId",
+        model: "Services",
+        populate: { path: "categoryId", model: "Category" },
+      },
+    ]);
+
+  if (!assignedServices.length) {
+    return next(new AppError("No Services found", 404));
+  }
+
+  const totalPages = Math.ceil(totalDocuments / limitNum);
+
+  res.status(200).json({
+    status: true,
+    message: "Here's the list",
+    page: pageNum,
+    limit: limitNum,
+    totalServices: totalDocuments,
+    totalPages,
+    assignedServices,
+  });
+});
+
+
+exports.updateServiceReq=catchAsync(async(req,res,next)=>{
+  const {serviceClientLinkId, description, serviceUpdateDocId } =
+    req.body;
+  console.log(req.body,'req.body')
+  let path = null;
+  
+  if (req.file) {
+    path = Date.now() + "-" + req.file.originalname;
+
+    uploadFile(req.file.buffer, path);
+  }
+  console.log('doc',req.file)
+  const serviceClientLinkDoc = await ServiceClientLink.findById(
+    serviceClientLinkId
+  );
+   console.log(serviceClientLinkDoc)
+  if (!serviceClientLinkDoc) {
+    return next(new AppError("The client have not purchased the service!"));
+  }
+
+  const updates = {serviceClientLinkId, description };
+  if (path) {
+    updates.doc = path;
+  }
+
+  const updatedDocument = await ServiceUpdate.findByIdAndUpdate(
+    serviceUpdateDocId,
+    updates,
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+
+  if (!updatedDocument) {
+    return next(new AppError("Document not found", 404));
+  }
+
+  res.status(200).json({
+    success: true,
+    message: "Updated successfully!",
+  });
+})
 
 exports.getServiceUpdates = catchAsync(async (req, res, next) => {
   const serviceClientLinkId = req.params.serviceClientLinkId;
@@ -398,7 +526,7 @@ exports.getServiceUpdates = catchAsync(async (req, res, next) => {
   const documents = await Document.find({ clientId: clientService.clientId, serviceClientLinkId: serviceClientLinkId })
   res.status(200).json({
     success: true,
-    info: { clientInfo, serviceInfo, updates, documents },
+    info: { clientInfo, serviceInfo, updates, documents,clientService },
     message: "Updates successfully Sent!",
   });
 });

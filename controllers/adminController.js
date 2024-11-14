@@ -718,13 +718,45 @@ exports.getClientUnPucharsedServices = catchAsync(async (req, res, next) => {
 });
 
 exports.getPurchasedServicesDocs = catchAsync(async (req, res, next) => {
-  const purchasedServices = await ServiceClientLink.find().populate([
+  const purchasedServices = await ServiceClientLink.find()
+    .sort({ createdAt: -1 }) // Sort by latest createdAt
+    .populate([
+      { path: "clientId", model: "Client" },
+      {
+        path: "serviceId",
+        model: "Services",
+        populate: { path: "categoryId", model: "Category" },
+      },
+      { path: "partnerId", model: "Partner" }
+    ]);
+
+  res.status(200).json({
+    success: true,
+    services: purchasedServices,
+    message: "Services sent!",
+  });
+});
+
+
+exports.filterPurchasedServicesDocs = catchAsync(async (req, res, next) => {
+  const { assignmentStatus } = req.query;
+  if(!assignmentStatus){
+    return next(new AppError('please provide status',400))
+  }
+  // Build the filter based on assignmentStatus
+  const filter = {};
+  if (assignmentStatus) {
+    filter.serviceStatus = assignmentStatus; // Filters by "assigned", "unassigned", or "completed"
+  }
+
+  const purchasedServices = await ServiceClientLink.find(filter).populate([
     { path: "clientId", model: "Client" },
     {
       path: "serviceId",
       model: "Services",
       populate: { path: "categoryId", model: "Category" },
     },
+    { path: "partnerId", model: "Partner" },
   ]);
 
   res.status(200).json({
@@ -733,6 +765,21 @@ exports.getPurchasedServicesDocs = catchAsync(async (req, res, next) => {
     message: "Services sent!",
   });
 });
+
+// Get Partner
+exports.getPartnerList=catchAsync(async(req,res,next)=>{
+  
+   const foundPartnersList= await Partner.find();
+   if(!foundPartnersList){
+    return next(new AppError('no partner found',200))
+   }
+   return res.status(200).json({
+    status:true,
+    message:'list found',
+    foundPartnersList
+   })
+
+})
 
 // service updates
 
@@ -1696,6 +1743,48 @@ exports.getServiceClientLinkData = catchAsync(async (req, res, next) => {
   });
 });
 
+exports.assignServicesToPartner = catchAsync(async (req, res, next) => {
+  const { partnerId, serviceClientLinkId } = req.body;
+
+  // Find and update the document by serviceClientLinkId
+  const assignedPartner = await ServiceClientLink.findByIdAndUpdate(
+    serviceClientLinkId,
+    { 
+      partnerId,
+      serviceStatus: "assigned"
+    },
+    { new: true }
+  );
+
+  // Check if the document was found and updated
+  if (!assignedPartner) {
+    return next(new AppError('No service-client link found with this ID', 404));
+  }
+
+  // Return a detailed response including the updated document
+  res.status(200).json({
+    status: true,
+    message: "Partner assigned successfully",
+    data: assignedPartner
+  });
+});
+
+exports.getServiceReqByPartner=catchAsync(async(req,res,next)=>{
+  const {partnerId}=req.query
+
+  if(!partnerId){
+    return next(new AppError('no partner found',400))
+  }
+  const foundServices=await ServiceReq.find(partnerId)
+  if(!foundServices){
+    return next(new AppError("no services found",400))
+  }
+  return res.status(200).json({
+    status:true,
+    message:"found services",
+    foundServices
+  })
+})
 // exports.getUpdateDocsByfId = catchAsync(async (req, res, next) => {
 //   const subFolderId = req.params.subFId;
 
