@@ -14,7 +14,11 @@ const serviceReqSchema = new mongoose.Schema(
       ref: "Services",
       required: true,
     },
-
+    partnerId:{
+      type: mongoose.Types.ObjectId,
+      ref: "Partner",
+      
+    },
     type: {
       type: String,
       enum: ["partner", "self", "admin"],

@@ -37,7 +37,11 @@ const serviceClientLinkSchema = new mongoose.Schema(
       enum: ['paid', 'due'],
       required:true
     },
-
+    serviceStatus:{
+      type:String,
+      enum:['assigned','unassigned','completed'],
+      default:"unassigned",
+    },
     type: {
       type: String,
       required:true
